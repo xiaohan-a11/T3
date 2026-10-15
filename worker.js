@@ -4,6 +4,7 @@
 // ==========================================
 
 class CustomBase64 {
+class CustomBase64 {
   constructor(customCharset) {
     this.standardCharset = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
     this.customCharset = customCharset;
@@ -28,8 +29,13 @@ class CustomBase64 {
 class RSACrypto {
   constructor(publicKeyPem) {
     this.publicKeyPem = publicKeyPem.trim();
+    this.n = null;
+    this.e = null;
+    this.keySize = 0;
+    this._parsePublicKey();
   }
-  async encryptToHex(data) {
+
+  _parsePublicKey() {
     const pemHeader = '-----BEGIN PUBLIC KEY-----';
     const pemFooter = '-----END PUBLIC KEY-----';
     let pemContents = this.publicKeyPem;
@@ -39,13 +45,90 @@ class RSACrypto {
     const binaryDerString = atob(pemContents);
     const binaryDer = new Uint8Array(binaryDerString.length);
     for (let i = 0; i < binaryDerString.length; i++) binaryDer[i] = binaryDerString.charCodeAt(i);
-    const key = await crypto.subtle.importKey(
-      'spki', binaryDer.buffer, { name: 'RSAES-PKCS1-V1_5' }, false, ['encrypt']
-    );
-    const dataBuffer = new TextEncoder().encode(data);
-    const encrypted = await crypto.subtle.encrypt({ name: 'RSAES-PKCS1-V1_5' }, key, dataBuffer);
-    const hashArray = Array.from(new Uint8Array(encrypted));
-    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('').toUpperCase();
+
+    let offset = 0;
+    const readTag = () => binaryDer[offset++];
+    const readLength = () => {
+      let length = binaryDer[offset++];
+      if (length & 0x80) {
+        const numBytes = length & 0x7f;
+        length = 0;
+        for (let i = 0; i < numBytes; i++) length = (length << 8) | binaryDer[offset++];
+      }
+      return length;
+    };
+    const readInteger = () => {
+      const tag = readTag();
+      if (tag !== 0x02) throw new Error('Expected INTEGER tag');
+      const len = readLength();
+      const bytes = binaryDer.slice(offset, offset + len);
+      offset += len;
+      let value = 0n;
+      for (let i = 0; i < bytes.length; i++) value = (value << 8n) | BigInt(bytes[i]);
+      return value;
+    };
+
+    readTag(); readLength();
+    this.n = readInteger();
+    this.e = readInteger();
+    this.keySize = Math.ceil(this.n.toString(16).length / 2);
+  }
+
+  _modPow(base, exp, mod) {
+    let result = 1n;
+    base = base % mod;
+    while (exp > 0n) {
+      if (exp % 2n === 1n) result = (result * base) % mod;
+      exp = exp >> 1n;
+      base = (base * base) % mod;
+    }
+    return result;
+  }
+
+  _bufferToBigInt(buffer) {
+    let result = 0n;
+    for (let i = 0; i < buffer.length; i++) result = (result << 8n) | BigInt(buffer[i]);
+    return result;
+  }
+
+  _bigIntToBuffer(bigint, length) {
+    const hex = bigint.toString(16).padStart(length * 2, '0');
+    const bytes = new Uint8Array(length);
+    for (let i = 0; i < length; i++) bytes[i] = parseInt(hex.substr(i * 2, 2), 16);
+    return bytes;
+  }
+
+  decryptFromBase64(base64Str) {
+    const binaryStr = atob(base64Str);
+    const encryptedData = new Uint8Array(binaryStr.length);
+    for (let i = 0; i < binaryStr.length; i++) encryptedData[i] = binaryStr.charCodeAt(i);
+
+    const decryptedBlocks = [];
+    let offset = 0;
+    while (offset < encryptedData.length) {
+      const block = encryptedData.slice(offset, offset + this.keySize);
+      let blockInt = this._bufferToBigInt(block);
+      let decryptedInt = this._modPow(blockInt, this.e, this.n);
+      let decryptedBlock = this._bigIntToBuffer(decryptedInt, this.keySize);
+      
+      let padEnd = -1;
+      for (let i = 2; i < decryptedBlock.length; i++) {
+        if (decryptedBlock[i] === 0x00) { padEnd = i; break; }
+      }
+      if (padEnd !== -1) {
+        decryptedBlocks.push(decryptedBlock.slice(padEnd + 1));
+      } else {
+        decryptedBlocks.push(decryptedBlock);
+      }
+      offset += this.keySize;
+    }
+
+    let totalLength = 0;
+    for (const b of decryptedBlocks) totalLength += b.length;
+    const result = new Uint8Array(totalLength);
+    let pos = 0;
+    for (const b of decryptedBlocks) { result.set(b, pos); pos += b.length; }
+    return new TextDecoder().decode(result);
   }
 }class T3Verify {
   constructor(env) {
