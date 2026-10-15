@@ -316,6 +316,53 @@ class RSACrypto {
       try {
         const targetUrl = new URL(url.replace(this.serverUrl, server));
         const res = await fetch(targetUrl.toString(), {
+class T3Verify {
+  constructor(env) {
+    this.serverUrls = ['https://w.t3yanzheng.com/', 'https://w2.t3yanzheng.com/', 'https://w3.t3yanzheng.com/', 'https://w4.t3yanzheng.com/', 'https://w5.t3yanzheng.com/', 'https://w.t3data.net/'];
+    this.serverUrl = this.serverUrls[0];
+    this.env = env;
+    this.unbindCode = env.T3_UNBIND_CODE;
+    this.appkey = env.T3_APPKEY;
+    this.encodeType = 'rsa';
+    this.rsaCrypto = new RSACrypto(); 
+  }
+
+  _buildUrl(code) {
+    return this.serverUrl.endsWith('/') ? `${this.serverUrl}${code}` : `${this.serverUrl}/${code}`;
+  }
+
+  async _encodeParams(params) {
+    const encodedParams = {};
+    for (const key of Object.keys(params)) {
+      encodedParams[key] = await this.rsaCrypto.encryptToHex(String(params[key]));
+    }
+    const parts = Object.keys(params).map(key => `${key}=${encodedParams[key]}`);
+    const sString = parts.join('&') + '&' + this.appkey;
+    const sValue = await this._md5(sString);
+    encodedParams['s'] = await this.rsaCrypto.encryptToHex(sValue);
+    return new URLSearchParams(encodedParams).toString();
+  }
+
+  async _md5(str) {
+    const msgBuffer = new TextEncoder().encode(str);
+    const hashBuffer = await crypto.subtle.digest('MD5', msgBuffer);
+    return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('').toLowerCase();
+  }
+
+  async _decodeResponse(responseText) {
+    try {
+      const decrypted = this.rsaCrypto.decryptFromBase64(responseText);
+      return JSON.parse(decrypted);
+    } catch (e) {
+      throw new Error(`响应解码失败: ${e.message}`);
+    }
+  }
+
+  async _httpRequest(url, postData) {
+    for (const server of this.serverUrls) {
+      try {
+        const targetUrl = new URL(url.replace(this.serverUrl, server));
+        const res = await fetch(targetUrl.toString(), {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
           body: postData
@@ -363,7 +410,8 @@ class RSACrypto {
       return { success: false, error: e.message };
     }
   }
-}async function sendMessage(env, chatId, text, replyMarkup = null, replyToMessageId = null) {
+}
+async function sendMessage(env, chatId, text, replyMarkup = null, replyToMessageId = null) {
   const url = `https://api.telegram.org/bot${env.BOT_TOKEN}/sendMessage`;
   const body = { chat_id: chatId, text: text, parse_mode: 'HTML', disable_web_page_preview: true };
   if (replyMarkup) body.reply_markup = JSON.stringify(replyMarkup);
