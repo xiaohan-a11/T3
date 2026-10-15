@@ -35,42 +35,42 @@ class RSACrypto {
   }
 
   _parsePublicKey() {
-    const pemHeader = '-----BEGIN PUBLIC KEY-----';
-    const pemFooter = '-----END PUBLIC KEY-----';
-    let pemContents = this.publicKeyPem;
-    if (pemContents.includes(pemHeader)) {
-      pemContents = pemContents.substring(pemHeader.length, pemContents.length - pemFooter.length).replace(/\s/g, '');
+  // 不管三七二十一，先把所有换行和头尾标记全部清理干净
+  let base64Str = this.publicKeyPem
+    .replace(/-----BEGIN PUBLIC KEY-----/g, '')
+    .replace(/-----END PUBLIC KEY-----/g, '')
+    .replace(/\s/g, ''); // 去掉所有空格、换行、回车
+
+  const binaryDerString = atob(base64Str);
+  const binaryDer = new Uint8Array(binaryDerString.length);
+  for (let i = 0; i < binaryDerString.length; i++) binaryDer[i] = binaryDerString.charCodeAt(i);
+
+  let offset = 0;
+  const readTag = () => binaryDer[offset++];
+  const readLength = () => {
+    let length = binaryDer[offset++];
+    if (length & 0x80) {
+      const numBytes = length & 0x7f;
+      length = 0;
+      for (let i = 0; i < numBytes; i++) length = (length << 8) | binaryDer[offset++];
     }
-    const binaryDerString = atob(pemContents);
-    const binaryDer = new Uint8Array(binaryDerString.length);
-    for (let i = 0; i < binaryDerString.length; i++) binaryDer[i] = binaryDerString.charCodeAt(i);
+    return length;
+  };
+  const readInteger = () => {
+    const tag = readTag();
+    if (tag !== 0x02) throw new Error('Expected INTEGER tag');
+    const len = readLength();
+    const bytes = binaryDer.slice(offset, offset + len);
+    offset += len;
+    let value = 0n;
+    for (let i = 0; i < bytes.length; i++) value = (value << 8n) | BigInt(bytes[i]);
+    return value;
+  };
 
-    let offset = 0;
-    const readTag = () => binaryDer[offset++];
-    const readLength = () => {
-      let length = binaryDer[offset++];
-      if (length & 0x80) {
-        const numBytes = length & 0x7f;
-        length = 0;
-        for (let i = 0; i < numBytes; i++) length = (length << 8) | binaryDer[offset++];
-      }
-      return length;
-    };
-    const readInteger = () => {
-      const tag = readTag();
-      if (tag !== 0x02) throw new Error('Expected INTEGER tag');
-      const len = readLength();
-      const bytes = binaryDer.slice(offset, offset + len);
-      offset += len;
-      let value = 0n;
-      for (let i = 0; i < bytes.length; i++) value = (value << 8n) | BigInt(bytes[i]);
-      return value;
-    };
-
-    readTag(); readLength();
-    this.n = readInteger();
-    this.e = readInteger();
-    this.keySize = Math.ceil(this.n.toString(16).length / 2);
+  readTag(); readLength();
+  this.n = readInteger();
+  this.e = readInteger();
+  this.keySize = Math.ceil(this.n.toString(16).length / 2);
   }
 
   async encryptToHex(data) {
