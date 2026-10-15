@@ -4,7 +4,6 @@
 // ==========================================
 
 class CustomBase64 {
-class CustomBase64 {
   constructor(customCharset) {
     this.standardCharset = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
     this.customCharset = customCharset;
