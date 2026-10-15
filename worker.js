@@ -279,7 +279,7 @@ class RSACrypto {
     this.appkey = env.T3_APPKEY;
     this.encodeType = 'rsa';
     this.rsaCrypto = new RSACrypto('-----BEGIN PUBLIC KEY-----MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQCaXUHziTXbsAm5zCogT0xPgOKQpj+YdiyKSKJtEO+qPq1COAa1ieKawg3H0kIF0C9XU6psGepcfCkCYm6tazkxMnxBQpfAzi8ughgW2hvkj92EV9MXSY9FiAC4l6ciEPSTXcTdBehBFpOeoYNyZQ77vRwnicVM1P6jQR3/PwEhIQIDAQAB-----END PUBLIC KEY-----');
-
+  }
   _buildUrl(code) {
     return this.serverUrl.endsWith('/') ? `${this.serverUrl}${code}` : `${this.serverUrl}/${code}`;
   }
