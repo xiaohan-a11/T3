@@ -293,7 +293,12 @@ export default {
     if (url.pathname === '/webhook' && request.method === 'POST') {
       try {
         const update = await request.json();
-        const t3 = new T3Verify(env);
+        let t3;
+        try {
+        t3 = new T3Verify(env);
+        } catch (e) {
+        return new Response(`❌ T3 初始化失败，可能是环境变量配置有误：${e.message}`, { status: 500 });
+        }
 
         if (update.message && update.message.text) {
           const chatId = update.message.chat.id;
