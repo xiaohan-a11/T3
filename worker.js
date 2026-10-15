@@ -72,7 +72,6 @@ class RSACrypto {
   this.e = readInteger();
   this.keySize = Math.ceil(this.n.toString(16).length / 2);
   }
-}
   async encryptToHex(data) {
     const pemHeader = '-----BEGIN PUBLIC KEY-----';
     const pemFooter = '-----END PUBLIC KEY-----';
