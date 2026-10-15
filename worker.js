@@ -97,6 +97,7 @@ class RSACrypto {
     return bytes;
   }
 
+
   decryptFromBase64(base64Str) {
     const binaryStr = atob(base64Str);
     const encryptedData = new Uint8Array(binaryStr.length);
