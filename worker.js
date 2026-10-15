@@ -170,6 +170,45 @@ class RSACrypto {
       alg: 'RSA-OAEP-256',
       ext: true,
     };
+class RSACrypto {
+  constructor() {
+    this.n = BigInt('0xca5d41f38935dbb009b9cc2a204f4c4f80e290a63f98762c8a48a26d10efaa3ead423806b589e29ac20dc7d24205d02f5753aa6c19ea5c7c2902626ead6b3931327c414297c0ce2f2e821816da1be48fdd8457d317498f458800b897a72210f4935dc4dde84116939ea18372650efbbd1c2789c54cd4fea3411dff3f01212102');
+    this.e = BigInt('0x10001');
+    this.keySize = 128;
+  }
+
+  async encryptToHex(data) {
+    const dataBuffer = new TextEncoder().encode(data);
+    const encrypted = await crypto.subtle.encrypt(
+      { name: 'RSAES-PKCS1-V1_5' }, 
+      await this._getPublicKey(), 
+      dataBuffer
+    );
+    const hashArray = Array.from(new Uint8Array(encrypted));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('').toUpperCase();
+  }
+
+  async _getPublicKey() {
+    const hexToBytes = (hex) => {
+      const bytes = new Uint8Array(hex.length / 2);
+      for (let i = 0; i < hex.length; i += 2) {
+        bytes[i / 2] = parseInt(hex.substr(i, 2), 16);
+      }
+      return bytes;
+    };
+    const bytesToBase64Url = (bytes) => {
+      let binary = '';
+      for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+      return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    };
+    const nBytes = hexToBytes(this.n.toString(16));
+    const jwk = {
+      kty: 'RSA',
+      n: bytesToBase64Url(nBytes),
+      e: 'AQAB',
+      alg: 'RSA-OAEP-256',
+      ext: true,
+    };
     return await crypto.subtle.importKey(
       'jwk', jwk, { name: 'RSAES-PKCS1-V1_5' }, false, ['encrypt']
     );
